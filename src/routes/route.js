@@ -1,12 +1,10 @@
 const express = require('express');
 const router = express.Router();
 
+const {createUser, userLogin, userProfile} = require('../controller/userController');
 
 
-//url's
-
-router.all('/*', function (req, res) {
-    res.status(404).send({ status: false, message: 'page not found' });
-});
-
-module.exports = router
+router.post("/register", createUser);
+router.post('/login', userLogin);
+router.get('/user/:userId/profile', userProfile);
+module.exports = router;

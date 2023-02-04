@@ -1,0 +1,143 @@
+const productModel=require("../models/productModel")
+const aws = require("aws-sdk");
+const {isValidObjectId} = require('mongoose')
+const {isValidAlpha,isValidPrice,isValidImage,}=require("../validations/validation")
+
+aws.config.update({
+    accessKeyId: "AKIAY3L35MCRZNIRGT6N",
+    secretAccessKey: "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",
+    region: "ap-south-1",
+  });
+  
+  let uploadFile = async (file) => {
+    return new Promise(function (resolve, reject) {
+      let s3 = new aws.S3({ apiVersion: "2006-03-01" });
+  
+      var uploadParams = {
+        ACL: "public-read",   //Access Control Locator
+        Bucket: "classroom-training-bucket",
+        Key: "abc/" + file.originalname,
+        Body: file.buffer,
+      };
+  
+      s3.upload(uploadParams, function (err, data) {
+        if (err) {
+          return reject({ error: err });
+        }
+        console.log("file uploaded succesfully");
+        return resolve(data.Location);
+      });
+    });
+  };
+
+
+
+const createProduct= async(req,res)=>{
+    try{
+    let productData=req.body;
+   
+    if(Object.keys(productData).length==0) return res.status(400).send({status:false, message:"Please provide product details to create a product"})
+
+    let {title,description,price,currencyId,currencyFormat,isFreeShipping,productImage,availableSizes,style,installments,...others}=productData
+
+    if(!title) return res.status(400).send({status:false, message:"please provide title"})
+    if(!isValidAlpha(title)) return res.status(400).send({status:false, message:"please provide valid title"})
+
+    if(!description) return res.status(400).send({status:false, message:"please provide description"})
+    if(!isValidAlpha(description)) return res.status(400).send({status:false, message:"please provide valid description"})
+
+    if(!price) return res.status(400).send({status:false, message:"please provide price"})
+    if(!isValidPrice(price)) return res.status(400).send({status:false, message:"please provide valid description"})
+    productData.price = parseFloat(price).toFixed(2);
+
+    if(!currencyId) return res.status(400).send({status:false, message:"please provide currencyId"})
+    if(currencyId&&currencyId!="INR"){
+      productData.currencyId="INR"
+    }
+  
+    if(!currencyFormat) return res.status(400).send({status:false, message:"please provide currencyFormat"})
+    if(currencyFormat&&currencyFormat!="₹"){
+      productData.currencyFormat="₹"
+    }
+    
+    if(!availableSizes) return res.status(400).send({status:false, message:"please provide availableSizes"})
+    availableSizes=availableSizes.split(",")
+    let arrOfSize=[]
+    for(i of availableSizes){
+      if(!["S", "XS","M","X", "L","XXL", "XL"].includes(i.trim())) return res.status(400).send({status:false, message:"please provide availableSizes in [S, XS, M, X, L, XXL, XL]"})
+      if(!arrOfSize.includes(i)) {
+      arrOfSize.push(i.trim())
+      }
+    }
+    
+    productData.availableSizes=arrOfSize
+    
+    if (Object.keys(others).length!=0) { return res.status(400).send({ status: false, message:`Please remove ${Object.keys(others)} key` }) }
+
+    let checkUniqueTitle= await productModel.findOne({title:title})
+    if(checkUniqueTitle) return res.status(400).send({status:false, message:`Title ${checkUniqueTitle.title} is already present`})
+
+    productImage = req.files;
+    if (Object.keys(productImage).length == 0) return res.status(400).send({ status: false, message: "Please upload Product Image" });
+    if(req.files.length>1) return res.status(400).send({status:false, message:"cannot upload more than one image"})
+    let image = await uploadFile(productImage[0]);
+    productData.productImage = image;
+    
+    let productCreated= await productModel.create(productData)
+    res.status(201).send({status:true, message:"Success", data:productCreated})
+
+    } catch(err){
+        res.status(500).send({status:false, message:err.message})
+    }
+}
+
+const getFilteredProduct = async function (req, res){
+  try {
+    let data = req.query
+    let conditions = { isDeleted: false}
+
+   if(Object.keys(data).length==0) {
+      let getProducts = await productModel.find(conditions).sort({ price: data.priceSort });
+      if(getProducts.length == 0) return res.status(404).send({ status: false, message: "No products found" });
+       return res.status(200).send({ status: true,message: "Success", data: getProducts })
+    }
+  
+    if (data.priceSort){
+      if(["1","-1"].indexOf(data.priceSort)<0){return res.status(400).send({status:false,message:"Please enter a valid sort order between 1 or -1"})}
+    }
+
+    if(data.size) {
+      data.size = data.size.toUpperCase();
+      if(!isValidSize(data.size)) return res.status(400).send({ status: false, message: "please enter a valid  size" })
+      conditions.availableSizes = {$in:data.size}}
+
+    if(data.name) {conditions.title = {$regex:data.name,$options:'i'}}
+
+    
+    if(data.priceGreaterThan || data.priceLessThan) {
+      
+      if(data.priceGreaterThan && data.priceLessThan){
+        if(!isValidPrice(data.priceGreaterThan)|| !isValidPrice(data.priceLessThan))return res.status(400).send({status:false,message:"Enter a valid price to get your product"})
+        conditions.price={$gt:data.priceGreaterThan,$lt:data.priceLessThan}}
+      else if(data.priceGreaterThan){
+        if(!isValidPrice(data.priceGreaterThan))return res.status(400).send({status:false,message:"Enter a valid price to get your product"})
+        conditions.price={$gt:data.priceGreaterThan}}
+      else{
+        if(!isValidPrice(data.priceLessThan))return res.status(400).send({status:false,message:"Enter a valid price to get your product"})
+        conditions.price={$lte:data.priceLessThan}}}
+
+
+    let getFilterProduct = await productModel.find(conditions).sort({ price:data.priceSort })
+    if(getFilterProduct.length == 0) return res.status(404).send({ status: false, message: "No products found" });
+
+    res.status(200).send({ status: true,message: "Success", data: getFilterProduct})
+  } 
+  catch (err) {
+    // let a=err.message.split(" ")
+    // if(a.includes("sort"))return res.send({status:false,msg:"Please enter a valid sort order between 1 or -1"})
+    res.status(500).send({ status: false, error: err.message });
+  }
+}
+
+
+module.exports={createProduct,getFilteredProduct}

@@ -4,6 +4,7 @@ const { isValidObjectId } = require('mongoose')
 
 const {createUser, userLogin, userProfile,updateUser} = require('../controller/userController');
 const {createProduct, getFilteredProduct, getProductById,updateProduct,deleteProductById} = require('../controller/productController');
+const {updateCart,createCart,getCart} = require("../controller/cartController")
 const {authentication,authorization}=require("../middlewares/middleware")
 
 
@@ -17,4 +18,10 @@ router.get('/products',getFilteredProduct);
 router.get('/products/:productId',getProductById)
 router.put('/products/:productId',updateProduct)
 router.delete('/products/:productId',deleteProductById)
+//card API
+router.post("/users/:userId/cart",authentication,authorization,createCart)
+router.put("/users/:userId/cart",authentication,authorization,updateCart)
+router.get("/users/:userId/cart",authentication,authorization,getCart)
+
+
 module.exports = router;

@@ -2,7 +2,7 @@ const userModel = require('../models/userModel');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { isValidObjectId } = require('mongoose')
-const { validName, validMail, validNumber, validPin, validCity, validStreet, validPassword } = require('../validations/validator');
+const { validName, validMail, validNumber, validPin, validCity, validStreet,isValidImage, validPassword } = require('../validations/validator');
 const aws = require("aws-sdk");
 
 
@@ -41,23 +41,22 @@ const createUser = async function (req, res) {
 
     // validations --
     if (Object.keys(body).length == 0) return res.status(400).send({ status: false, message: 'please enter all required details to register a user' });
-    let { fname, lname, email, phone, profileImage, password } = req.body;
-    //console.log(fname)
+    let { fname, lname, email, phone, profileImage, password,address, ...rest } = req.body;
+    if (Object.keys(rest).length > 0) return res.status(400).send({ status: false, message: `please remove unnecessary key` });
     if (!fname) return res.status(400).send({ status: false, message: 'fname is required, please enter fname to register a user' });
     if (!validName(fname)) return res.status(400).send({ status: false, message: 'fname is invalid, please enter a valid fname to register a user' });
     if (!lname) return res.status(400).send({ status: false, message: 'lname is required, please enter lname to register a user' });
     if (!validName(lname)) return res.status(400).send({ status: false, message: 'lname is invalid, please enter a valid lname to register a user' });
     if (!email) return res.status(400).send({ status: false, message: 'email is required, please enter email to register a user' });
     if (!validMail(email)) return res.status(400).send({ status: false, message: 'email is invalid, please enter a valid email' });
-    if (!phone) res.status(400).send({ status: false, message: 'phone number is required, please enter phone number to register a user' });
-    if (!validNumber(phone)) res.status(400).send({ status: false, message: 'phone number is invalid, please enter a valid phone number to register a user' });
+    if (!phone) return res.status(400).send({ status: false, message: 'phone number is required, please enter phone number to register a user' });
+    if (!validNumber(phone)) return res.status(400).send({ status: false, message: 'phone number is invalid, please enter a valid phone number to register a user' });
     //if (!profileImage) return res.status(400).send({ status: false, message: 'profile image is required, please enter profile image to register a user' });
     //if (!profileImage) return res.status(400).send({ status: false, message: 'profile image is invalid, please enter a valid profile image to register a user' });
     if (!password) return res.status(400).send({ status: false, message: 'password is required, please enter password to register a user' });
     if (!validPassword.validate(password)) return res.status(400).send({ status: false, message: 'password is weak, please enter a strong password to register a user' });
 
-    const address = JSON.parse(body.address);
-    //console.log(body.address)
+    address = JSON.parse(address);
     if (!address) return res.status(400).send({ status: false, message: 'address is required, please enter address to register a user' });
     if (typeof address != 'object') return res.status(400).send({ status: false, message: 'address format is invalid, please enter address in a valid format' });
     const { shipping, billing } = address;
@@ -91,14 +90,20 @@ const createUser = async function (req, res) {
     });
 
     // for unique email and phone -------------
-    let user = {};
-    user = await userModel.findOne({ email: email })
-    if (user) return res.status(409).send({ status: false, message: 'email already in use, please enter a unique email to register a user' });
-    user = await userModel.findOne({ phone: phone });
-    if (user) return res.status(409).send({ status: false, message: 'phone number is already in use, please enter a unique phone number to register a user' });
+
+    let user = await userModel.findOne({ $or: [{ email: email }, { phone: phone }] });
+    if (user) {
+        if (user.email == email)
+            return res.status(409).send({ status: false, message: 'email already in use, please enter a unique email to register a user' });
+        if (user.phone == phone)
+            return res.status(409).send({ status: false, message: 'phone number is already in use, please enter a unique phone number to register a user' });
+    };
+
     //creating link using aws------------------------
     profileImage = req.files;
+    if (!isValidImage(profileImage)) return res.status(400).send({status: false, message: 'please provide valid image file'});
     if (Object.keys(profileImage).length == 0) return res.status(400).send({ status: false, message: "Please upload Profile Image" });
+    if (req.files.length > 1) return res.status(400).send({ status: false, message: "cannot upload more than one image" })
 
     let image = await uploadFile(profileImage[0]);
 
@@ -148,7 +153,7 @@ const userProfile = async function (req, res) {
         if (!isValidObjectId(userId)) return res.status(400).send({ status: false, message: "Enter valid user Id " })
         let findUserDetails = await userModel.findById({ _id: userId })
         if (!findUserDetails) return res.status(404).send({ status: false, message: "user detail is not present " })
-        return res.status(200).send({ status: true, data: findUserDetails })
+        return res.status(200).send({ status: true, message: 'User profile details', data: findUserDetails })
     }
     catch (error) {
         return res.status(500).send({ status: false, message: error.message })
@@ -162,7 +167,8 @@ const updateUser = async function (req, res) {
         let userId = req.params.userId
         let data = req.body
         let files = req.files
-        const { fname, lname, email, phone, password, address } = data
+        const { fname, lname, email, phone, password, address, ...rest } = data;
+        if (Object.keys(rest).length > 0) return res.status(400).send({ status: false, message: `please remove unnecessary key` });
         let updateData = {}
         if (!isValidObjectId(userId)) return res.status(400).send({ status: false, message: "pls provide valid object" })
         let getUser = await userModel.findById({ _id: userId })
@@ -190,6 +196,16 @@ const updateUser = async function (req, res) {
             if (!validName(lname || lname == " ")) return res.status(400).send({ status: false, message: "pls provide valid last name" })
             updateData.lname = lname
         }
+
+        // for unique email and phone -------------
+
+        let user = await userModel.findOne({ $or: [{ email: email }, { phone: phone }] });
+        if (user) {
+            if (user.email == email)
+                return res.status(409).send({ status: false, message: 'email already in use, please enter a unique email to register a user' });
+            if (user.phone == phone)
+                return res.status(409).send({ status: false, message: 'phone number is already in use, please enter a unique phone number to register a user' });
+        };
         if (email) {
             if (!validMail(email) || email == " ") return res.status(400).send({ status: false, message: "pls provide valid email" })
             updateData.email = email
@@ -255,9 +271,10 @@ const updateUser = async function (req, res) {
             updateData["address"] = getUser.address
         }
 
-
+        updateData.updatedAt = Date.now();
+        console.log(updateData);
         let modifiedData = await userModel.findByIdAndUpdate({ _id: userId }, updateData, { new: true });
-        return res.status(200).send({ status: true, message: "User profile updated", data: modifiedData });
+        return res.status(201).send({ status: true, message: "User profile updated", data: modifiedData });
 
     } catch (error) {
         return res.status(500).send({ status: false, message: error.message })

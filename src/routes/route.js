@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { isValidObjectId } = require('mongoose')
 
 const { createUser, userLogin, userProfile, updateUser } = require('../controller/userController');
 const { createProduct, getFilteredProduct, getProductById, updateProduct, deleteProductById } = require('../controller/productController');

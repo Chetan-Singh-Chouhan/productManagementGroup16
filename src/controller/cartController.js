@@ -151,7 +151,7 @@ const deleteCartById = async function (req, res) {
       const isUserExist = await userModel.findOne({ _id: userId}).count()
       if (isUserExist == 0)
         return res.status(404).send({ status: false, message: "User Not Found or already deleted" });
-      await cartModel.findOneAndUpdate({ _id:userId}, { $set: { items:[],totalPrice:0,totalItems:0 }}, { new: true })
+      await cartModel.findOneAndUpdate({ userId:userId}, { $set: { items:[],totalPrice:0,totalItems:0 }}, { new: true })
       return res.status(200).send({ status: true, message: "User's Cart has been Deleted" });
     }
     catch (err) {

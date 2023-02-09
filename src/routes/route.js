@@ -26,4 +26,8 @@ router.delete('/users/:userId/cart', authentication, authorization, deleteCartBy
 // order API
 router.post("/users/:userId/orders",authentication, authorization,  createOrder)
 router.put("/users/:userId/orders", authentication, authorization, updateOrder)
+
+router.all('/*', function (req, res) {
+    res.status(404).send({ status: false, message: 'Url is Invalid' });
+});
 module.exports = router;

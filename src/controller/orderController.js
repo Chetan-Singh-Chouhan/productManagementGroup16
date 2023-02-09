@@ -11,15 +11,14 @@ const createOrder = async (req,res)=>{
         let userId = req.params.userId;
         if(!isValidObjectId(userId)) return res.status(400).send({status:false,message:'invalid userId'});
 
-        //if(req.decodedToken!= userId) return res.send('unauthorised');
-
         let data = req.body;
         if(Object.keys(data).length==0) return res.status(400).send({status:false, message:'please give some data'});
 
         let {cartId,cancellable,status,...a} = data;
-        //if(Object.keys(a).length!=0) return res.send('remove unnecessary key');
+        if(Object.keys(a).length!=0) return res.status(400).send({status:false, message:'remove unnecessary key'});
 
         if(!cartId) return res.status.send({status:false, message:'cartId required'});
+        cartId=String(cartId)
         if(!isValidObjectId(cartId)) return res.status(400).send({status:false, message:'invalid cartId'});
 
         if(cancellable){
@@ -71,6 +70,7 @@ const updateOrder = async (req, res) => {
         if (Object.keys(a).length != 0) return res.status(400).send({status: false, message: 'please remove unnecessary fields'})
 
         if (!orderId) return res.send('orderId required');
+         orderId=String(orderId)
         if (!isValidObjectId(orderId)) return res.status(400).send({status: false, message: 'invalid orderId'})
 
         if (!status) return res.send('status required');
